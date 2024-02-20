@@ -7,7 +7,7 @@ class cluster:
         self.k = k
         self.max_iterations = max_iterations
 
-    def fit(self, X):
+    def fit(self, X, balanced = False):
         # X is a list (not columns of a Dataframe) of n instances in d dimensions (features)
        
         n = len(X)  # number of instances
@@ -42,8 +42,61 @@ class cluster:
                 break
             
             iteration += 1
-        
+
+        if balanced:
+            cluster_hypotheses, centroids = self.balance_clusters(X, cluster_hypotheses, centroids)
         # Return A. A list (of length n) of the cluster hypotheses, one for each instance.
         # Return B. A list (of length at most k) containing lists (each of length d) of the cluster centroids’ values.
         return cluster_hypotheses, centroids
+    
+
+    def balance_clusters(self, X, cluster_hypotheses, centroids):
+        # Count the number of instances in each cluster
+        cluster_counts = [cluster_hypotheses.count(i) for i in range(self.k)]
+        print("Original cluster: ",cluster_counts)
+
+        # Calculate the target number of instances for each cluster
+        target_cluster_count = sum(cluster_counts)//len(cluster_counts)
+
+        small_clusters = []
+
+        # Redistribute the points among the clusters
+        for i in range(self.k):
+            if cluster_counts[i] > target_cluster_count:
+                # Remove points from large clusters
+                instances_to_remove = cluster_counts[i] - target_cluster_count
+                cluster_indices = [j for j in range(len(cluster_hypotheses)) if cluster_hypotheses[j] == i]
+                distances_to_centroid = [np.linalg.norm(np.array(X[j]) - np.array(centroids[i])) for j in cluster_indices]
+                instances_to_remove_indices = np.argsort(distances_to_centroid)[-instances_to_remove:]
+                for index in instances_to_remove_indices:
+                    cluster_hypotheses[cluster_indices[index]] = -1  # Remove the point from its current cluster assignment
+            if cluster_counts[i] < target_cluster_count:
+                # Find small clusters
+                small_clusters.append(i)
+
+        cluster_counts = [cluster_hypotheses.count(i) for i in range(self.k)]
+        print("Remove the out points for the large cluster: ",cluster_counts)
+
+        # Redistribute the removed points among the clusters based on their distances to the centroids
+        for i in range(len(cluster_hypotheses)):
+            if cluster_hypotheses[i] == -1:
+                distances = [np.linalg.norm(np.array(X[i]) - np.array(centroids[j])) for j in small_clusters]
+                cluster_hypotheses[i] = small_clusters[np.argmin(distances)]
+
+        cluster_counts = [cluster_hypotheses.count(i) for i in range(self.k)]
+        print("Redistribute the removed points to the small cluster: ",cluster_counts)
+
+
+        # Recalculate the centroids
+        new_centroids = []
+        for i in range(self.k):
+            cluster_indices = [j for j in range(len(cluster_hypotheses)) if cluster_hypotheses[j] == i]
+            cluster_points = [X[j] for j in cluster_indices]
+            if cluster_points:
+                new_centroids.append(np.mean(cluster_points, axis=0))
+            else:
+                new_centroids.append(centroids[i])
+
+        return cluster_hypotheses, new_centroids
+
 
